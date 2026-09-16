@@ -36,7 +36,7 @@ ShiftSchedule BYTE 1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1
 
 .CODE
 
-------------------------------------------------------------------------------
+;------------------------------------------------------------------------------
 ;(1)Get Bits
 ;GetBit(bufferPtr, bitNumber) -> EAX = 0 / 1
 ;Read single bit from byte buffer: bitNumber is 1-based, with bit 1 being the MSB of the first byte in the buffer(byte 0). 
@@ -63,5 +63,48 @@ GetBit PROC bufferPtr:PTR BYTE, bitNumber:Dword
     and eax, 1                ; Mask out all but the LSB
     ret
 GetBit ENDP
+;------------------------------------------------------------------------------
 
-------------------------------------------------------------------------------
+;---------------------------------------------------------------
+;SetBit(bufferPtr, bitNumber, bitValue)
+;write single bit into byte buffer using 1-based MSB-first numbering (same as GetBit). bitValue is 0 or 1.
+
+SetBit PROC bufferPtr: PTR BYTE, bitNumber:DWORD, bitValue:DWord
+    LOCAL byteIndex:Dword
+    LOCAl bitInByte:Dword
+    LOCAL shiftAmt:Dword
+    LOCAL maskBit:Dword
+
+    mov eax, bitNumber
+    dec eax
+    mov ebx, eax
+    shr eax, 3
+    mov byteIndex, eax
+    and ebx, 7
+    mov bitInByte, ebx
+    mov eax, 7
+    sub eax, ebx
+    mov shiftAmt, eax
+
+    mov edi, bufferPtr
+    add edi, byteIndex
+
+    mov ecx, shiftAmt
+    mov eax, 1
+    shl eax, cl
+    mov maskBit,eax             ;maskBit = 1 << shiftAmt
+
+    movzx eax, BYTE PTR [edi]  
+    mo ebx, maskBit
+    not ebx
+    and eax, ebx                ; Clear the target bit
+
+    cmp bitValue, 0
+    je SetBit_Store
+    or eax, maskBit             ; Set it back to 1 if bitValue is 1
+
+SetBit_Store:
+    mov BYTE PTR [edi], al      ; Store the modified byte back to the buffer
+    ret
+SetBit ENDP
+;------------------------------------------------------------------------------
