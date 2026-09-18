@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build MASM Multi-File",
+      "type": "shell",
+      "command": "cmd.exe",
+      "args": [
+        "/c",
+        "ml /c /coff /I\"C:\\Irvine\" main.asm interactiveShell.asm && link /subsystem:console /libpath:\"C:\\Irvine\" Irvine32.lib kernel32.lib user32.lib main.obj interactiveShell.obj && main.exe"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}
