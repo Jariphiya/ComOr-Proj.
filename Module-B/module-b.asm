@@ -170,3 +170,53 @@ PermutateBits_Exit:
     ret
 PermutateBits ENDP
 ;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+;ExtractBits28(value, bitNumber) -> eax = 0 or 1
+;value is 28-bit quantity stored RIGHT-justified in 32-bit (dword)
+;bitNumber is 1-based, MSB-first wth bit 1 = bit 27 of value
+
+ExtractBits28 PROC value:Dword, bitNumber:Dword
+    Local shiftAmt:Dword
+
+    mov eax, 28
+    sub eax, bitNumber
+    mov shiftAmt, eax
+
+    mov eax, value
+    mov ecx, shiftAmt
+    shr eax, cl
+    and eax, 1
+    ret
+ExtractBits28 ENDP
+;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+;RotateLeft28(value, shiftCount) -> eax = rotated value
+;circular left shift of a 28-bit  (shiftCount is 1 or 2 for DES)
+
+RotateLeft28 PROC value:Dword, shiftCount:Dword
+    Local leftPart: Dword
+    Local rightPart: Dword
+    Local rightShitAmt: Dword
+
+    mov eax, 28
+    sub eax, shiftCount
+    mov rightShiftAmt, eax
+
+    mov eax, value
+    mov ecx, shiftCount
+    shl eax, cl
+    mov leftPart, eax
+
+    mov eax,value
+    mov ecx, rightShiftAmt
+    shr eax, cl
+    mov rightPart, eax
+
+    mov eax, leftPart
+    or eax, rightPart
+    and eax, 0FFFFFFFh          ;keep only low 28 bits
+    ret
+RotateLeft28 ENDP
+;-------------------------------------------------------------------------------
