@@ -35,6 +35,12 @@ ShiftSchedule BYTE 1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1
 ;-----------------------------------------------------------------------------
 
 .CODE
+-------------------------------------------------------------------------------
+PUBLIC GetBit
+Public SetBit
+Public PC1Table, PC2Table, ShiftSchedule
+-------------------------------------------------------------------------------
+
 
 ;------------------------------------------------------------------------------
 ;(1)Get Bits
@@ -57,21 +63,23 @@ GetBit PROC bufferPtr:PTR BYTE, bitNumber:Dword
     sub eax, ebx               ;MSB-fist: shift = 7 - bitInByte
     mov shiftAmt, eax
 
-    mov eax, [bufferPtr]      ; Load the byte from the buffer
-    movzx eax, byte ptr [eax + byteIndex] ; Load the byte at bufferPtr + byteIndex
-    shr eax, shiftAmt         ; Shift right to get the desired bit in LSB position
-    and eax, 1                ; Mask out all but the LSB
+    mov esi, bufferPtr
+    add esi, byteIndex
+    movzx eax, BYTE PTR [esi]
+    mov ecx, shiftAmt
+    shr eax, cl
+    and eax, 1
     ret
 GetBit ENDP
 ;------------------------------------------------------------------------------
 
-;---------------------------------------------------------------
+;------------------------------------------------------------------------------
 ;SetBit(bufferPtr, bitNumber, bitValue)
 ;write single bit into byte buffer using 1-based MSB-first numbering (same as GetBit). bitValue is 0 or 1.
 
 SetBit PROC bufferPtr: PTR BYTE, bitNumber:DWORD, bitValue:DWord
     LOCAL byteIndex:Dword
-    LOCAl bitInByte:Dword
+    LOCAL bitInByte:Dword
     LOCAL shiftAmt:Dword
     LOCAL maskBit:Dword
 
@@ -88,14 +96,13 @@ SetBit PROC bufferPtr: PTR BYTE, bitNumber:DWORD, bitValue:DWord
 
     mov edi, bufferPtr
     add edi, byteIndex
-
     mov ecx, shiftAmt
     mov eax, 1
     shl eax, cl
     mov maskBit,eax             ;maskBit = 1 << shiftAmt
 
     movzx eax, BYTE PTR [edi]  
-    mo ebx, maskBit
+    mov ebx, maskBit
     not ebx
     and eax, ebx                ; Clear the target bit
 
@@ -107,4 +114,59 @@ SetBit_Store:
     mov BYTE PTR [edi], al      ; Store the modified byte back to the buffer
     ret
 SetBit ENDP
-;------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+;PermutateBits(srcPtr, destPtr, tablePtr, tableLen)
+;For every entry i in the table, destBit(i+1) = srcBit(table[i])
+;can be reuse for PC1, PC2, IP, Ip-1
+;destPtr must point to buffer with at least (tableLen/8) bytes
+
+PermutateBits Proc scrPtr:PTR BYTE, destPtr: PTR BYTE, tablePtr:PTR BYTE, tableLen: DWORD
+    Local clearBytes: DWORD
+    Local i:DWORD
+
+    ; ---- zero destination buffer ----
+    mov eax, tableLen 
+    add eax, 7              
+    shr eax, 3           
+    mov clearBytes, eax 
+
+    mov edi, destPtr
+    mov ecx, clearBytes
+
+PermutateBits_ClearLoop:
+    cmp ecx, 0
+    je PermutateBits_ClearDone
+    mov BYTE PTR [edi], 0
+    inc edi 
+    dec ecx
+    jmp PermutateBits_ClearLoop
+PermutateBits_ClearDone:
+
+; ---- copy bits according to the table ----
+    mov i, 0
+PermutateBits_Loop:
+    mov eax, i
+    cmp eax, tableLen
+    jge PermutateBits_Exit
+
+    mov esi, tablePtr
+    add esi, eax
+    movzx ebx, BYTE PTR [esi]  ; ebx = source bit number (1-based)
+
+    INVOKE GetBit, scrPtr, ebx  ; eax holds bit value previously read
+
+    mov edx, i
+    inc edx                             ;destinatino bit number = i + 1
+    INVOKE SetBit, destPtr, edx, eax
+
+    mov eax, i
+    inc eax
+    mov i, eax
+    jmp PermutateBits_Loop
+
+PermutateBits_Exit:
+    ret
+PermutateBits ENDP
+;-------------------------------------------------------------------------------
