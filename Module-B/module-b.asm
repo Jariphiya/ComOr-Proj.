@@ -220,3 +220,114 @@ RotateLeft28 PROC value:Dword, shiftCount:Dword
     ret
 RotateLeft28 ENDP
 ;-------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------
+;BuildCD0(keyPtr, cOutPtr, dOutptr)
+;Applies PC-1 to the 64-bit key and splits the 56-bit result into C0 an D0 (each right-justified 28 bits)
+
+BuildCD0 PROC keyPtr: PTR BYTE, cOutPtr:PTR Dword, dOutPtr:PTR Dword
+    Local pc10out[7]:BYTE
+    Local cVal:Dword
+    Local dVal:Dword
+    Local i:Dword
+
+    LEA edi, pc10out
+    INVOKE PermutateBits, keyPtr, edi, ADDR PC1Table, 56
+
+    ;----C0 - buts 1-28 of pc10out---
+    mov cVal, 0
+    mov i, 1
+BuildCD0_CLoop:
+    mov eax, i
+    cmp eax, 29
+    jge BuildCD0_CDone
+    LEA esi, pc10out
+    INVOKE GetBit, edi, eax
+    mov ebx, cVal
+    shl ebx, 1
+    or ebx, eax
+    mov cVal, ebx
+    mov eax, i
+    inc eax
+    mov i, eax
+    jmp BuildCD0_CLoop
+BuildCD0_CDone:
+
+;---D0 - bits 29-56 of pc10out---
+    mov dVal, 0
+    mov i, 29
+BuildCD0_DLoop:
+    mov eax, i
+    cmp eax, 57
+    jge BuildCD0_DDone
+    LEA edi, pc10out
+    INVOKE GetBit, edi, eax
+    mov ebx, dVal
+    shl ebx, 1
+    or ebx, eax
+    mov dVal, ebx
+    mov eax, i
+    inc eax
+    mov i, eax
+    jmp BuildCD0_DLoop
+BuildCD0_DDone:
+
+    mov eax, cOutPtr
+    mov eax, cVal
+    mov [edi], eax
+    mov edi, dOutPtr
+    mov eax, dVal
+    mov [edi], eax
+    ret
+BuildCD0 ENDP
+;-------------------------------------------------------------------------------
+
+;--------------------------------------------------------------------------------
+;PackCD(Cval, dVal, destPtr)
+;Packs a 28-bit C and a 28-bit D into a 56-bit buffer
+
+PackCD PROC cVal:Dword, dVal:Dword, destPtr:PTR BYTE
+    Local i:Dword
+    Local bitVal:Dword
+    Local localBitNum:Dword
+
+    ;--- bits 1-28 from C ---
+    mov i, 1
+PackCD_CLoop:
+    mov eax, i
+    cmp eax, 29
+    jge PackCD_CDone
+    INVOKE ExtractBits28, cVal, eax
+    mov bitVal, eax
+    mov eax, i
+    INVOKE SetBit, destPtr, eax, bitVal
+    mov eax, i
+    inc eax
+    mov i, eax
+    jmp PackCD_CLoop
+PackCD_CDone:
+
+    ;---- bits 29-56 from D ----
+    mov i, 29
+PackCD_DLoop: 
+    mov eax, i
+    cmp eax, 57
+    jge PackCD_DDone
+    mov eax, i
+    sub eax, 28                     ; local bit position inside D (1...28)
+    mov localBitNum, eax
+    INVOKE ExtractBits28, dVal, localBitNum
+    mov bitVal, eax
+    mov eax, i
+    INVOKE SetBit, destPtr, eax, bitVal
+    mov eax, i
+    inc eax
+    mov i, eax
+    jmp PackCD_DLoop
+PackCD_DDone:
+    ret
+PackCD ENDP
+;--------------------------------------------------------------------------------
+
+
+
