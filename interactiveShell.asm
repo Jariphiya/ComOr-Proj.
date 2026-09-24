@@ -5,16 +5,43 @@ EXTERN main@0:PROC
 
 INCLUDE Irvine32.inc
 
-PUBLIC RunShell, inputBuffer
+PUBLIC RunShell, inputBuffer, argFile, keyBytes, fileBuffer,
+       outBuffer, fileSize, outSize
+
+; =========================================================
+; Constants
+; =========================================================
+MAX_INPUT EQU 256
+MAX_FILE EQU 65536
+CMD_COUNT EQU 7
+
+; FSM states
+S_GAP  EQU 0 ; between tokens (whitespace)
+S_WORD EQU 1 ; inside unquote token
+S_QARG EQU 2 ; inside "quote token"
 
 .DATA
     ; Display manu
     promptIntro BYTE "=== Welcome to DES Encryption! ===", 0
+    promptMenu BYTE "--- Available Commands ---", 0Dh, 0Ah
+                BYTE "Keygen", 0Dh, 0Ah
+               BYTE  "Encrypt Message/file", 0Dh, 0Ah
+               BYTE  "Decrypt Message/file", 0Dh, 0Ah
+               BYTE  "Dump", 0Dh, 0Ah
+               BYTE  "Stat", 0Dh, 0Ah
+               BYTE  "Clear", 0Dh, 0Ah
+               BYTE  "Exit", 0Dh, 0Ah
+               BYTE "(key = 16 hex digits, e.g. 0x133457799BBCDFF1)", 0
     promptShell BYTE "DES-Shell> ", 0
-    promptMsg BYTE "Enter message to encryption: ", 0
+    promptMsg BYTE "Enter message/file to encryption: ", 0
     promptKey BYTE "Enter key: ", 0
     resultMsg BYTE "Encrypted message: ", 0
-    errorMsg BYTE "[-] Error: Invalid command", 0
+
+    ; Error Message
+    errorMsgCmd BYTE "[-] Error: Invalid command", 0 ; dont find input command
+
+
+    ; If user have input file
 
     ; Mock Message for testing
     msgEn BYTE "[+] Action: Encryption selected", 0
@@ -49,10 +76,13 @@ RunShell PROC
 
 ShellLoop:
     ; =========================================================
-    ; Show  Shell Prompt
+    ; Show Shell & Menu Prompt
     ; =========================================================
+    mov edx, OFFSET promptMenu ; show menu
+    call WriteString
     call Crlf
-    MOV EDX, OFFSET promptShell
+
+    MOV EDX, OFFSET promptShell ; show prompt รับคำสั่ง
     call WriteString
 
     ; =========================================================
@@ -102,7 +132,7 @@ ShellLoop:
     jz ExitShell
 
     ; if cmd not in system
-    MOV EDX, OFFSET errorMsg
+    MOV EDX, OFFSET errorMsgCmd
     call WriteString
     call Crlf
     jmp ShellLoop
