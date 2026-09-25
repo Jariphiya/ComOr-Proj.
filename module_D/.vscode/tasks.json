@@ -1,0 +1,26 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build MASM32 Project",
+            "type": "shell",
+            "command": "cmd",
+            "args": [
+                "/c",
+                "C:\\masm32\\bin\\ml.exe /c /Zd /coff *.asm && C:\\masm32\\bin\\link.exe /SUBSYSTEM:CONSOLE *.obj && echo. && echo === Build Complete! ==="
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "clear": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}
