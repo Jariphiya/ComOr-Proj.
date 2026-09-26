@@ -2,8 +2,8 @@
 .model flat, stdcall
 option casemap:none
 
-INCLUDE Irvine32.inc
-INCLUDELIB Irvine32.lib
+INCLUDE \masm32\include\Irvine32.inc ;เด่วมาแก้ขอ test แปป
+INCLUDELIB \masm32\lib\Irvine32.lib
 
 ;-----------------------------------------------------------------------------
 ;                                 DATA SEGMENT
@@ -11,35 +11,45 @@ INCLUDELIB Irvine32.lib
 
 .DATA
 ;Permutation Choice 1 mapping table
-PC1Table BYTE 57,49,41,33,25,17,9,1,
-            BYTE 58,50,42,34,26,18,10,2,
-            BYTE 59,51,43,35,27,19,11,3,
-            BYTE 60,52,44,36,63,55,47,39,
-            BYTE 31,23,15,7,62,54,46,38,
-            BYTE 30,22,14,6,61,53,45,37,
-            BYTE 29,21,13,5,28,20,12,4
+PC1Table BYTE 57,49,41,33,25,17,9,1
+BYTE 58,50,42,34,26,18,10,2
+BYTE 59,51,43,35,27,19,11,3
+BYTE 60,52,44,36,63,55,47,39
+BYTE 31,23,15,7,62,54,46,38
+BYTE 30,22,14,6,61,53,45,37
+BYTE 29,21,13,5,28,20,12,4
 
-PC2Table BYTE 14,17,11,24,1,5,
-            BYTE 3,28,15,6,21,10,
-            BYTE 23,19,12,4,26,8,
-            BYTE 16,7,27,20,13,2,
-            BYTE 41,52,31,37,47,55,
-            BYTE 30,40,51,45,33,48,
-            BYTE 44,49,39,56,34,53,
-            BYTE 46,42,50,36,29,32
+PC2Table BYTE 14,17,11,24,1,5
+BYTE 3,28,15,6,21,10
+BYTE 23,19,12,4,26,8
+BYTE 16,7,27,20,13,2
+BYTE 41,52,31,37,47,55
+BYTE 30,40,51,45,33,48
+BYTE 44,49,39,56,34,53
+BYTE 46,42,50,36,29,32
 
 ShiftSchedule BYTE 1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1
+
+; ------------------------------ Test data ---------------------------------
+TestKey  BYTE 013h,034h,057h,079h,09Bh,0BCh,0DFh,0F1h
+SubKeys  BYTE 96 DUP(0)          ; 16 rounds * 6 bytes = 96 bytes
+
+KLabel   BYTE "K",0
+EqLabel  BYTE " = ",0
+HexDigits BYTE "0123456789ABCDEF"
+SpaceChar BYTE " ",0
+;----------------------------------------------------------------------------
 
 ;-----------------------------------------------------------------------------
 ;                               CODE SEGMENT
 ;-----------------------------------------------------------------------------
 
 .CODE
--------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
 PUBLIC GetBit
 Public SetBit
 Public PC1Table, PC2Table, ShiftSchedule
--------------------------------------------------------------------------------
+;-------------------------------------------------------------------------------
 
 
 ;------------------------------------------------------------------------------
@@ -198,7 +208,7 @@ ExtractBits28 ENDP
 RotateLeft28 PROC value:Dword, shiftCount:Dword
     Local leftPart: Dword
     Local rightPart: Dword
-    Local rightShitAmt: Dword
+    Local rightShiftAmt: Dword
 
     mov eax, 28
     sub eax, shiftCount
@@ -234,14 +244,14 @@ BuildCD0 PROC keyPtr: PTR BYTE, cOutPtr:PTR Dword, dOutPtr:PTR Dword
     LEA edi, pc10out
     INVOKE PermutateBits, keyPtr, edi, ADDR PC1Table, 56
 
-    ;----C0 - buts 1-28 of pc10out---
+    ;----C0 - bits 1-28 of pc10out---
     mov cVal, 0
     mov i, 1
 BuildCD0_CLoop:
     mov eax, i
     cmp eax, 29
     jge BuildCD0_CDone
-    LEA esi, pc10out
+    LEA edi, pc10out
     INVOKE GetBit, edi, eax
     mov ebx, cVal
     shl ebx, 1
@@ -260,7 +270,7 @@ BuildCD0_DLoop:
     mov eax, i
     cmp eax, 57
     jge BuildCD0_DDone
-    LEA edi, pc10out
+    LEA edi, pc10out        ;Lea -> calculates mem address and store that directly into dest. reg
     INVOKE GetBit, edi, eax
     mov ebx, dVal
     shl ebx, 1
@@ -272,7 +282,7 @@ BuildCD0_DLoop:
     jmp BuildCD0_DLoop
 BuildCD0_DDone:
 
-    mov eax, cOutPtr
+    mov edi, cOutPtr
     mov eax, cVal
     mov [edi], eax
     mov edi, dOutPtr
@@ -329,5 +339,153 @@ PackCD_DDone:
 PackCD ENDP
 ;--------------------------------------------------------------------------------
 
+;--------------------------------------------------------------------------------
+;GenerateKeySchedule(keyPtr,subkeysPtr)
+;keyPtr -> 8 byte DES key
+;subkeysPtr -> 96 bytes (16 * 6), k1-K16 in order 
 
+GenerateKeySchedule PROC keyPtr:PTR Byte, subkeysPtr:PTR BYTE
+    Local cCurrent:Dword
+    Local dCurrent:Dword
+    Local cdBuffer[7]:BYTE
+    Local round:Dword
+    Local destOffset:Dword
+    Local shiftAmt: Dword
 
+    LEA eax, cCurrent
+    LEA ebx, dCurrent
+    INVOKE BuildCD0, keyPtr, eax, ebx
+
+    mov round,1 
+GenKS_Loop:
+    mov eax, round
+    cmp eax, 17
+    jge GenKS_Done
+
+    ;look up this round's shift amt [1/2] (table is 0 indexed)
+    mov esi, Offset ShiftSchedule
+    mov eax, round
+    dec eax
+    add esi, eax
+    movzx eax, BYTE PTR[esi]
+    mov shiftAmt, eax
+
+    INVOKE RotateLeft28, cCurrent, shiftAmt
+    mov cCurrent, eax
+    INVOKE RotateLeft28, dCurrent, shiftAmt
+    mov dCurrent, eax
+
+    LEA edi, cdBuffer
+    INVOKE PackCD, cCurrent, dCurrent, edi
+
+    ;dest offset in subkeys array = (round - 1 ) * 6
+    mov eax, round
+    dec eax
+    mov ebx, 6
+    mul ebx
+    mov destOffset, eax
+
+    mov edi, subkeysPtr
+    add edi, destOffset
+    LEA esi, cdBuffer
+    INVOKE PermutateBits, esi, edi, ADDR PC2Table, 48
+
+    mov eax, round
+    inc eax
+    mov round, eax
+    jmp GenKS_Loop
+
+GenKS_Done:
+    ret
+GenerateKeySchedule ENDP 
+;-------------------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------------------
+;PrintHexByte(byteVal) -> testing helper only
+;Prints exactly 2 hex digits for a value 0-255, unlike WriteHex which always
+;prints a full 8-digit 32-bit value.
+
+PrintHexByte PROC byteVal:DWORD
+    mov eax, byteVal
+    mov ecx, eax
+    shr ecx, 4
+    and ecx, 0Fh
+    mov edx, OFFSET HexDigits
+    add edx, ecx
+    movzx eax, BYTE PTR [edx]
+    call WriteChar
+
+    mov eax, byteVal
+    and eax, 0Fh
+    mov edx, OFFSET HexDigits
+    add edx, eax
+    movzx eax, BYTE PTR [edx]
+    call WriteChar
+    ret
+PrintHexByte ENDP
+;-------------------------------------------------------------------------------------------
+
+;-------------------------------------------------------------------------------------------
+;DisplayKeySchedule(subkeysPtr) -> testing helper only
+;prints K1-K16 as hex bytes, one round per line
+
+DisplayKeySchedule PROC subkeysPtr:PTR BYTE
+    Local round: Dword
+    Local byteIdx: Dword
+    Local rowOffset:Dword
+
+    mov round, 1
+Disp_RoundLoop:
+    mov eax, round
+    cmp eax, 17
+    jge Disp_Done
+
+    mov eax, round
+    dec eax
+    mov ebx, 6
+    mul ebx
+    mov rowOffset, eax
+
+    mov edx, OFFSET KLabel
+    call WriteString
+    mov eax, round 
+    call WriteDec
+    mov edx, OFFSET EqLabel
+    call WriteString
+
+    mov byteIdx, 0
+Disp_ByteLoop:
+    mov eax, byteIdx
+    cmp eax, 6
+    jge Disp_ByteDone
+    mov esi, subkeysPtr
+    add esi, rowOffset
+    add esi, byteIdx
+    movzx eax, BYTE PTR [esi]
+    INVOKE PrintHexByte, eax ;fix for printing
+    mov edx, OFFSET SpaceChar
+    call WriteString
+    mov eax, byteIdx
+    inc eax
+    mov byteIdx, eax
+    jmp Disp_ByteLoop
+Disp_ByteDone:
+    call Crlf
+
+    mov eax, round 
+    inc eax
+    mov round, eax
+    jmp Disp_RoundLoop
+Disp_Done:
+    ret
+DisplayKeySchedule ENDP
+;--------------------------------------------------------------------------------------
+
+;--------------------------------------------------------------------------------------
+main PROC 
+    INVOKE GenerateKeySchedule, ADDR TestKey, ADDR SubKeys
+    INVOKE DisplayKeySchedule, ADDR SubKeys
+    INVOKE ExitProcess, 0
+main ENDP 
+
+end main
