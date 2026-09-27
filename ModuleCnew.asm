@@ -1,59 +1,39 @@
+; =====================================================================
+; Reuses GetBit / PermuteBits / GenerateKeySchedule / SubKeys from Module B 
+; =====================================================================
+
 .386
 .model flat, stdcall
-
 option casemap:none
 
-INCLUDE C:\Users\natch\Downloads\Irvine\Irvine\Irvine32.inc
-INCLUDELIB C:\Users\natch\Downloads\Irvine\Irvine\Irvine32.lib
-INCLUDELIB C:\Users\natch\Downloads\Irvine\Irvine\Kernel32.lib
-INCLUDELIB C:\Users\natch\Downloads\Irvine\Irvine\User32.lib
+INCLUDE C:\Irvine\Irvine32.inc
+INCLUDELIB C:\Irvine\Irvine32.lib
+INCLUDELIB C:\Irvine\Kernel32.lib
+INCLUDELIB C:\Irvine\User32.lib
 
+; --- Imported from Module B ---
 GenerateKeySchedule PROTO :PTR BYTE, :PTR BYTE
+GetBit              PROTO :PTR BYTE, :DWORD
+PermutateBits         PROTO :PTR BYTE, :PTR BYTE, :PTR BYTE, :DWORD
 EXTERN SubKeys:BYTE
 
-PUBLIC DESEncryptBlock
-PUBLIC DESDecryptBlock
-PUBLIC PKCS7_Pad
-PUBLIC PKCS7_Unpad
-PUBLIC DESEncryptECB
-PUBLIC DESDecryptECB
-
-ApplySBoxes    PROTO :PTR BYTE, :PTR BYTE
-Expansion      PROTO :PTR BYTE, :PTR BYTE
-Xor48          PROTO :PTR BYTE, :PTR BYTE, :PTR BYTE
-PermutationP   PROTO :PTR BYTE, :PTR BYTE
-InverseInitialPermutation PROTO :PTR BYTE, :PTR BYTE
-FeistelRound        PROTO :PTR DWORD, :PTR DWORD, :PTR BYTE
-FeistelRoundDecrypt PROTO :PTR DWORD, :PTR DWORD, :PTR BYTE
+PUBLIC DESEncryptBlock, DESDecryptBlock, PKCS7_Pad, PKCS7_Unpad, DESEncryptECB, DESDecryptECB
 
 .data
-    IP_Table  BYTE 58,50,42,34,26,18,10,2
-              BYTE 60,52,44,36,28,20,12,4
-              BYTE 62,54,46,38,30,22,14,6
-              BYTE 64,56,48,40,32,24,16,8
-              BYTE 57,49,41,33,25,17,9,1
-              BYTE 59,51,43,35,27,19,11,3
-              BYTE 61,53,45,37,29,21,13,5
-              BYTE 63,55,47,39,31,23,15,7
-              
-    E_Table BYTE 32,1,2,3,4,5
-            BYTE 4,5,6,7,8,9
-            BYTE 8,9,10,11,12,13
-            BYTE 12,13,14,15,16,17
-            BYTE 16,17,18,19,20,21
-            BYTE 20,21,22,23,24,25
-            BYTE 24,25,26,27,28,29
-            BYTE 28,29,30,31,32,1
-            
-    IP_Inv_Table BYTE 40,8,48,16,56,24,64,32
-                 BYTE 39,7,47,15,55,23,63,31
-                 BYTE 38,6,46,14,54,22,62,30
-                 BYTE 37,5,45,13,53,21,61,29
-                 BYTE 36,4,44,12,52,20,60,28
-                 BYTE 35,3,43,11,51,19,59,27
-                 BYTE 34,2,42,10,50,18,58,26
-                 BYTE 33,1,41,9,49,17,57,25
-                 
+    IP_Table  BYTE 58,50,42,34,26,18,10,2, 60,52,44,36,28,20,12,4
+              BYTE 62,54,46,38,30,22,14,6, 64,56,48,40,32,24,16,8
+              BYTE 57,49,41,33,25,17,9,1,  59,51,43,35,27,19,11,3
+              BYTE 61,53,45,37,29,21,13,5, 63,55,47,39,31,23,15,7
+
+    E_Table   BYTE 32,1,2,3,4,5,   4,5,6,7,8,9,     8,9,10,11,12,13
+              BYTE 12,13,14,15,16,17, 16,17,18,19,20,21, 20,21,22,23,24,25
+              BYTE 24,25,26,27,28,29, 28,29,30,31,32,1
+
+    IP_Inv_Table BYTE 40,8,48,16,56,24,64,32, 39,7,47,15,55,23,63,31
+                 BYTE 38,6,46,14,54,22,62,30, 37,5,45,13,53,21,61,29
+                 BYTE 36,4,44,12,52,20,60,28, 35,3,43,11,51,19,59,27
+                 BYTE 34,2,42,10,50,18,58,26, 33,1,41,9,49,17,57,25
+
     S1_Table BYTE 14,4,13,1,2,15,11,8,3,10,6,12,5,9,0,7
              BYTE 0,15,7,4,14,2,13,1,10,6,12,11,9,5,3,8
              BYTE 4,1,14,8,13,6,2,11,15,12,9,7,3,10,5,0
@@ -86,153 +66,85 @@ FeistelRoundDecrypt PROTO :PTR DWORD, :PTR DWORD, :PTR BYTE
              BYTE 1,15,13,8,10,3,7,4,12,5,6,11,0,14,9,2
              BYTE 7,11,4,1,9,12,14,2,0,6,10,13,15,3,5,8
              BYTE 2,1,14,7,4,10,8,13,15,12,9,0,3,5,6,11
-             
-    P_Table BYTE 16,7,20,21
-            BYTE 29,12,28,17
-            BYTE 1,15,23,26
-            BYTE 5,18,31,10
-            BYTE 2,8,24,14
-            BYTE 32,27,3,9
-            BYTE 19,13,30,6
-            BYTE 22,11,4,25
-    ipOutput BYTE 8 DUP(0) ; Initial Permutation output
-    roundRight BYTE 4 DUP(0) ; Right half converted to MSB-first bytes
-    roundExpanded BYTE 6 DUP(0) ; Expansion output
-    roundXored BYTE 6 DUP(0) ; E(R) XOR K
-    roundSboxed BYTE 4 DUP(0) ; S-Box output
-    roundPboxed BYTE 4 DUP(0) ; P-Box output
-    finalBlock BYTE 8 DUP(0) ; R16 || L16
+
+    ; lets ApplySBoxes loop over all 8 S-boxes instead of 8 copy-pasted blocks
+    SBoxPtrs DWORD OFFSET S1_Table, OFFSET S2_Table, OFFSET S3_Table, OFFSET S4_Table
+             DWORD OFFSET S5_Table, OFFSET S6_Table, OFFSET S7_Table, OFFSET S8_Table
+
+    P_Table BYTE 16,7,20,21, 29,12,28,17, 1,15,23,26, 5,18,31,10
+            BYTE 2,8,24,14,  32,27,3,9,   19,13,30,6, 22,11,4,25
+
+    ipOutput      BYTE 8 DUP(0)   ; Initial Permutation output
+    roundRight    BYTE 4 DUP(0)   ; half fed into f(), MSB-first bytes
+    roundExpanded BYTE 6 DUP(0)   ; Expansion output
+    roundXored    BYTE 6 DUP(0)   ; E(R) XOR K
+    roundSboxed   BYTE 4 DUP(0)   ; S-Box output
+    roundPboxed   BYTE 4 DUP(0)   ; P-Box output
+    finalBlock    BYTE 8 DUP(0)   ; pre-output block, before IP-1
     L0 DWORD 0
     R0 DWORD 0
     decryptInputPtr  DWORD ?
     decryptOutputPtr DWORD ?
     decryptBlocks    DWORD ?
-    
+
 .code
 
-GetBit_C PROC uses ebx esi, \ 
-    bufferPtr:PTR BYTE, \
-    bitNumber:DWORD
-    LOCAL byteIndex:DWORD
-    LOCAL bitInByte:DWORD
-    LOCAL shiftAmt:DWORD
-    mov eax, bitNumber
-    dec eax
-    mov ebx, eax
-    shr eax, 3
-    mov byteIndex, eax
-    and ebx, 7
-    mov bitInByte, ebx
-    mov eax, 7
-    sub eax, ebx
-    mov shiftAmt, eax
-    mov esi, bufferPtr
-    add esi, byteIndex
+;PackBytesToDword(srcPtr) -> EAX : reads 4 bytes MSB-first into one 32-bit value
+PackBytesToDword PROC uses ebx esi srcPtr:PTR BYTE
+    mov esi, srcPtr
     movzx eax, BYTE PTR [esi]
-    mov ecx, shiftAmt
-    shr eax, cl
-    and eax, 1
+    shl eax, 24
+    movzx ebx, BYTE PTR [esi+1]
+    shl ebx, 16
+    or eax, ebx
+    movzx ebx, BYTE PTR [esi+2]
+    shl ebx, 8
+    or eax, ebx
+    movzx ebx, BYTE PTR [esi+3]
+    or eax, ebx
     ret
-GetBit_C ENDP
+PackBytesToDword ENDP
 
-SetBit_C PROC uses ebx edi, \
-    bufferPtr:PTR BYTE, \
-    bitNumber:DWORD, \
-    bitValue:DWORD
-    LOCAL byteIndex:DWORD
-    LOCAL bitInByte:DWORD
-    LOCAL shiftAmt:DWORD
-    LOCAL maskBit:DWORD
-    mov eax, bitNumber
-    dec eax
-    mov ebx, eax
-    shr eax, 3
-    mov byteIndex, eax
-    and ebx, 7
-    mov bitInByte, ebx
-    mov eax, 7
-    sub eax, ebx
-    mov shiftAmt, eax
-    mov edi, bufferPtr
-    add edi, byteIndex
-    mov ecx, shiftAmt
-    mov eax, 1
-    shl eax, cl
-    mov maskBit, eax
-    movzx eax, BYTE PTR [edi]
-    mov ebx, maskBit
-    not ebx
-    and eax, ebx
-    cmp bitValue, 0
-    je SetBit_Store
-    or eax, maskBit
-SetBit_Store:
-    mov BYTE PTR [edi], al
-    ret
-SetBit_C ENDP
-
-PermuteBits_C PROC uses ebx esi edi, \
-    srcPtr:PTR BYTE, \
-    destPtr:PTR BYTE, \
-    tablePtr:PTR BYTE, \
-    tableLen:DWORD
-    LOCAL clearBytes:DWORD
-    LOCAL i:DWORD
-    mov eax, tableLen
-    add eax, 7
-    shr eax, 3
-    mov clearBytes, eax
+;UnpackDwordToBytes(value, destPtr) : reverse of PackBytesToDword
+UnpackDwordToBytes PROC uses ebx edi value:DWORD, destPtr:PTR BYTE
     mov edi, destPtr
-    mov ecx, clearBytes
-ClearLoop:
-    cmp ecx, 0
-    je ClearDone
-    mov BYTE PTR [edi], 0
-    inc edi
-    dec ecx
-    jmp ClearLoop
-ClearDone:
-    mov i, 0
-PermuteLoop:
-    mov eax, i
-    cmp eax, tableLen
-    jge PermuteDone
-    mov esi, tablePtr
-    add esi, eax
-    movzx ebx, BYTE PTR [esi]
-    INVOKE GetBit_C, srcPtr, ebx
-    mov edx, i
-    inc edx
-    INVOKE SetBit_C, destPtr, edx, eax
-    mov eax, i
-    inc eax
-    mov i, eax
-    jmp PermuteLoop
-PermuteDone:
+    mov eax, value
+    mov ebx, eax
+    shr ebx, 24
+    mov BYTE PTR [edi], bl
+    mov ebx, eax
+    shr ebx, 16
+    mov BYTE PTR [edi+1], bl
+    mov ebx, eax
+    shr ebx, 8
+    mov BYTE PTR [edi+2], bl
+    mov BYTE PTR [edi+3], al
     ret
-PermuteBits_C ENDP
+UnpackDwordToBytes ENDP
 
+; --- thin wrappers: each just names which table PermuteBits should use ---
 InitialPermutation PROC srcPtr:PTR BYTE, destPtr:PTR BYTE
-    INVOKE PermuteBits_C, \
-        srcPtr, \
-        destPtr, \
-        ADDR IP_Table, \
-        64
+    INVOKE PermutateBits, srcPtr, destPtr, ADDR IP_Table, 64
     ret
 InitialPermutation ENDP
+
 Expansion PROC srcPtr:PTR BYTE, destPtr:PTR BYTE
-    INVOKE PermuteBits_C, \
-        srcPtr, \
-        destPtr, \
-        ADDR E_Table, \
-        48
+    INVOKE PermutateBits, srcPtr, destPtr, ADDR E_Table, 48
     ret
 Expansion ENDP
 
-Xor48 PROC uses ebx ecx edx esi edi, \
-    src1Ptr:PTR BYTE, \
-    src2Ptr:PTR BYTE, \
-    destPtr:PTR BYTE
+PermutationP PROC srcPtr:PTR BYTE, destPtr:PTR BYTE
+    INVOKE PermutateBits, srcPtr, destPtr, ADDR P_Table, 32
+    ret
+PermutationP ENDP
+
+InverseInitialPermutation PROC srcPtr:PTR BYTE, destPtr:PTR BYTE
+    INVOKE PermutateBits, srcPtr, destPtr, ADDR IP_Inv_Table, 64
+    ret
+InverseInitialPermutation ENDP
+
+;Xor48(src1Ptr, src2Ptr, destPtr) : XORs two 6-byte (48-bit) buffers
+Xor48 PROC uses ebx ecx edx esi edi src1Ptr:PTR BYTE, src2Ptr:PTR BYTE, destPtr:PTR BYTE
     mov esi, src1Ptr
     mov edi, src2Ptr
     mov ebx, destPtr
@@ -249,6 +161,7 @@ XorLoop:
     ret
 Xor48 ENDP
 
+;SBoxLookup(sixBits, tablePtr) -> EAX : row=(bit1<<1)|bit6, col=middle 4 bits
 SBoxLookup PROC sixBits:DWORD, tablePtr:PTR BYTE
     push ebx
     push ecx
@@ -277,10 +190,9 @@ SBoxLookup PROC sixBits:DWORD, tablePtr:PTR BYTE
     ret
 SBoxLookup ENDP
 
+;Get6Bits(srcPtr, startBit) -> EAX : reads 6 consecutive bits via GetBit
 Get6Bits PROC srcPtr:PTR BYTE, startBit:DWORD
-    LOCAL result:DWORD
-    LOCAL bitNum:DWORD
-    LOCAL count:DWORD
+    LOCAL result:DWORD, bitNum:DWORD, count:DWORD
     push ebx
     push ecx
     push edx
@@ -290,12 +202,14 @@ Get6Bits PROC srcPtr:PTR BYTE, startBit:DWORD
     mov bitNum, eax
     mov count, 6
 Get6Loop:
-    INVOKE GetBit_C, srcPtr, bitNum
+    INVOKE GetBit, srcPtr, bitNum
     mov edx, result
     shl edx, 1
     or edx, eax
     mov result, edx
-    inc bitNum
+    mov eax, bitNum
+    inc eax
+    mov bitNum, eax
     mov eax, count
     dec eax
     mov count, eax
@@ -309,232 +223,84 @@ Get6Loop:
     ret
 Get6Bits ENDP
 
-ApplySBoxes PROC srcPtr:PTR BYTE, destPtr:PTR BYTE
-    LOCAL result:DWORD
-    LOCAL sixBits:DWORD
-    LOCAL sValue:DWORD
-    push ebx
-    push ecx
-    push edx
-    push esi
-    push edi
+;ApplySBoxes(srcPtr, destPtr) : loops over SBoxPtrs instead of 8 copy-pasted blocks
+ApplySBoxes PROC uses ebx ecx edx esi edi srcPtr:PTR BYTE, destPtr:PTR BYTE
+    LOCAL result:DWORD, sixBits:DWORD, startBit:DWORD, i:DWORD
     mov result, 0
-    INVOKE Get6Bits, srcPtr, 1
+    mov startBit, 1
+    mov i, 0
+SBoxLoop:
+    mov eax, i
+    cmp eax, 8
+    jge SBoxDone
+    INVOKE Get6Bits, srcPtr, startBit
     mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S1_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 7
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S2_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 13
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S3_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 19
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S4_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 25
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S5_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 31
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S6_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 37
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S7_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    INVOKE Get6Bits, srcPtr, 43
-    mov sixBits, eax
-    INVOKE SBoxLookup, sixBits, ADDR S8_Table
-    mov sValue, eax
-    mov eax, result
-    shl eax, 4
-    or eax, sValue
-    mov result, eax
-    mov edi, destPtr
-    mov eax, result
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR [edi], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR [edi+1], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR [edi+2], bl
-    mov BYTE PTR [edi+3], al
-    pop edi
-    pop esi
-    pop edx
-    pop ecx
-    pop ebx
+    mov eax, i
+    mov edx, SBoxPtrs[eax*4]
+    INVOKE SBoxLookup, sixBits, edx
+    mov ebx, result
+    shl ebx, 4
+    or ebx, eax
+    mov result, ebx
+    mov eax, startBit
+    add eax, 6
+    mov startBit, eax
+    mov eax, i
+    inc eax
+    mov i, eax
+    jmp SBoxLoop
+SBoxDone:
+    INVOKE UnpackDwordToBytes, result, destPtr
     ret
 ApplySBoxes ENDP
 
-PermutationP PROC srcPtr:PTR BYTE, destPtr:PTR BYTE
-    INVOKE PermuteBits_C, \
-        srcPtr, \
-        destPtr, \
-        ADDR P_Table, \
-        32
-    ret
-PermutationP ENDP
-
-FeistelRound PROC leftPtr:PTR DWORD, \
-                     rightPtr:PTR DWORD, \
-                     keyPtr:PTR BYTE
-    LOCAL oldLeft:DWORD
-    LOCAL oldRight:DWORD
-    push ebx
-    push ecx
-    push edx
-    push esi
-    push edi
+;FeistelRound(leftPtr, rightPtr, keyPtr) : L' = R, R' = L XOR f(R,K)
+FeistelRound PROC uses ebx ecx edx esi edi leftPtr:PTR DWORD, rightPtr:PTR DWORD, keyPtr:PTR BYTE
+    LOCAL oldLeft:DWORD, oldRight:DWORD, fResult:DWORD
     mov esi, leftPtr
     mov eax, DWORD PTR [esi]
     mov oldLeft, eax
     mov esi, rightPtr
     mov eax, DWORD PTR [esi]
     mov oldRight, eax
-    mov eax, oldRight
-    mov esi, OFFSET roundRight
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR [esi], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR [esi+1], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR [esi+2], bl
-    mov BYTE PTR [esi+3], al
-    
-    INVOKE Expansion, \
-        ADDR roundRight, \
-        ADDR roundExpanded
-    INVOKE Xor48, \
-        ADDR roundExpanded, \
-        keyPtr, \
-        ADDR roundXored
-    INVOKE ApplySBoxes, \
-        ADDR roundXored, \
-        ADDR roundSboxed
-    INVOKE PermutationP, \
-        ADDR roundSboxed, \
-        ADDR roundPboxed
-        
-    mov esi, OFFSET roundPboxed
-    movzx eax, BYTE PTR [esi]
-    shl eax, 24
-    movzx ebx, BYTE PTR [esi+1]
-    shl ebx, 16
-    or eax, ebx
-    movzx ebx, BYTE PTR [esi+2]
-    shl ebx, 8
-    or eax, ebx
-    movzx ebx, BYTE PTR [esi+3]
-    or eax, ebx
-    mov edx, eax
-    mov eax, oldRight
+
+    INVOKE UnpackDwordToBytes, oldRight, ADDR roundRight
+    INVOKE Expansion, ADDR roundRight, ADDR roundExpanded
+    INVOKE Xor48, ADDR roundExpanded, keyPtr, ADDR roundXored
+    INVOKE ApplySBoxes, ADDR roundXored, ADDR roundSboxed
+    INVOKE PermutationP, ADDR roundSboxed, ADDR roundPboxed
+    INVOKE PackBytesToDword, ADDR roundPboxed
+    mov fResult, eax
+
     mov edi, leftPtr
+    mov eax, oldRight
     mov DWORD PTR [edi], eax
-    mov eax, oldLeft
-    xor eax, edx
     mov edi, rightPtr
+    mov eax, oldLeft
+    xor eax, fResult
     mov DWORD PTR [edi], eax
-    pop edi
-    pop esi
-    pop edx
-    pop ecx
-    pop ebx
     ret
 FeistelRound ENDP
 
-FeistelRoundDecrypt PROC uses eax ebx ecx edx esi edi, \
-    LPtr:PTR DWORD, \
-    RPtr:PTR DWORD, \
-    subKeyPtr:PTR BYTE
-    LOCAL oldL:DWORD
-    LOCAL oldR:DWORD
-    LOCAL fValue:DWORD
-    
+;FeistelRoundDecrypt(LPtr, RPtr, subKeyPtr) : mirrors FeistelRound in reverse -
+;decrypt treats the block as R16L16, so f() is fed oldL here, not oldR.
+FeistelRoundDecrypt PROC uses ebx ecx edx esi edi LPtr:PTR DWORD, RPtr:PTR DWORD, subKeyPtr:PTR BYTE
+    LOCAL oldL:DWORD, oldR:DWORD, fValue:DWORD
     mov esi, LPtr
     mov eax, DWORD PTR [esi]
     mov oldL, eax
     mov edi, RPtr
     mov eax, DWORD PTR [edi]
     mov oldR, eax
-    mov eax, oldL
-    mov esi, OFFSET roundRight
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR [esi], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR [esi+1], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR [esi+2], bl
-    mov BYTE PTR [esi+3], al
-    
-    INVOKE Expansion, \
-        ADDR roundRight, \
-        ADDR roundExpanded
-    INVOKE Xor48, \
-        ADDR roundExpanded, \
-        subKeyPtr, \
-        ADDR roundXored
-    INVOKE ApplySBoxes, \
-        ADDR roundXored, \
-        ADDR roundSboxed
-    INVOKE PermutationP, \
-        ADDR roundSboxed, \
-        ADDR roundPboxed
-        
-    mov esi, OFFSET roundPboxed
-    movzx eax, BYTE PTR [esi]
-    shl eax, 24
-    movzx ebx, BYTE PTR [esi+1]
-    shl ebx, 16
-    or eax, ebx
-    movzx ebx, BYTE PTR [esi+2]
-    shl ebx, 8
-    or eax, ebx
-    movzx ebx, BYTE PTR [esi+3]
-    or eax, ebx
+
+    INVOKE UnpackDwordToBytes, oldL, ADDR roundRight
+    INVOKE Expansion, ADDR roundRight, ADDR roundExpanded
+    INVOKE Xor48, ADDR roundExpanded, subKeyPtr, ADDR roundXored
+    INVOKE ApplySBoxes, ADDR roundXored, ADDR roundSboxed
+    INVOKE PermutationP, ADDR roundSboxed, ADDR roundPboxed
+    INVOKE PackBytesToDword, ADDR roundPboxed
     mov fValue, eax
+
     mov esi, RPtr
     mov eax, oldL
     mov DWORD PTR [esi], eax
@@ -545,175 +311,58 @@ FeistelRoundDecrypt PROC uses eax ebx ecx edx esi edi, \
     ret
 FeistelRoundDecrypt ENDP
 
-InverseInitialPermutation PROC srcPtr:PTR BYTE, \
-                                   destPtr:PTR BYTE
-    INVOKE PermuteBits_C, \
-        srcPtr, \
-        destPtr, \
-        ADDR IP_Inv_Table, \
-        64
-    ret
-InverseInitialPermutation ENDP
-
-DESEncryptBlock PROC uses ebx ecx esi edi, \
-    plainPtr:PTR BYTE, \
-    keyPtr:PTR BYTE, \
-    cipherPtr:PTR BYTE
-    
-    INVOKE GenerateKeySchedule, \
-        keyPtr, \
-        ADDR SubKeys
-    INVOKE InitialPermutation, \
-        plainPtr, \
-        ADDR ipOutput
-        
-    movzx eax, BYTE PTR ipOutput[0]
-    shl eax, 24
-    movzx ebx, BYTE PTR ipOutput[1]
-    shl ebx, 16
-    or eax, ebx
-    movzx ebx, BYTE PTR ipOutput[2]
-    shl ebx, 8
-    or eax, ebx
-    movzx ebx, BYTE PTR ipOutput[3]
-    or eax, ebx
+;DESEncryptBlock(plainPtr, keyPtr, cipherPtr) : one 8-byte block
+DESEncryptBlock PROC uses ebx ecx esi edi plainPtr:PTR BYTE, keyPtr:PTR BYTE, cipherPtr:PTR BYTE
+    INVOKE GenerateKeySchedule, keyPtr, ADDR SubKeys
+    INVOKE InitialPermutation, plainPtr, ADDR ipOutput
+    INVOKE PackBytesToDword, OFFSET ipOutput
     mov L0, eax
-    movzx eax, BYTE PTR ipOutput[4]
-    shl eax, 24
-    movzx ebx, BYTE PTR ipOutput[5]
-    shl ebx, 16
-    or eax, ebx
-    movzx ebx, BYTE PTR ipOutput[6]
-    shl ebx, 8
-    or eax, ebx
-    movzx ebx, BYTE PTR ipOutput[7]
-    or eax, ebx
+    INVOKE PackBytesToDword, OFFSET ipOutput+4
     mov R0, eax
+
     mov ecx, 16
     mov esi, OFFSET SubKeys
 RoundLoop_Encrypt:
-
-    INVOKE FeistelRound, \
-        ADDR L0, \
-        ADDR R0, \
-        esi
-        
+    INVOKE FeistelRound, ADDR L0, ADDR R0, esi
     add esi, 6
     dec ecx
-    cmp ecx, 0
-    jne RoundLoop_Encrypt
-    mov eax, R0
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR finalBlock[0], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR finalBlock[1], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR finalBlock[2], bl
-    mov BYTE PTR finalBlock[3], al
-    mov eax, L0
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR finalBlock[4], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR finalBlock[5], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR finalBlock[6], bl
-    mov BYTE PTR finalBlock[7], al
-    
-    INVOKE InverseInitialPermutation, \
-        ADDR finalBlock, \
-        cipherPtr
+    jnz RoundLoop_Encrypt
+
+    ; pre-output is R16 || L16 (final swap folded in here)
+    INVOKE UnpackDwordToBytes, R0, OFFSET finalBlock
+    INVOKE UnpackDwordToBytes, L0, OFFSET finalBlock+4
+    INVOKE InverseInitialPermutation, ADDR finalBlock, cipherPtr
     ret
 DESEncryptBlock ENDP
 
-DESDecryptBlock PROC uses ebx ecx esi edi, \
-    cipherPtr:PTR BYTE, \
-    keyPtr:PTR BYTE, \
-    plainPtr:PTR BYTE
-    
-    INVOKE GenerateKeySchedule, \
-        keyPtr, \
-        ADDR SubKeys
-    INVOKE InitialPermutation, \
-        cipherPtr, \
-        ADDR ipOutput
-        
-    movzx eax, BYTE PTR [ipOutput]
-    shl eax, 24
-    movzx ebx, BYTE PTR [ipOutput+1]
-    shl ebx, 16
-    or eax, ebx
-    movzx ebx, BYTE PTR [ipOutput+2]
-    shl ebx, 8
-    or eax, ebx
-    movzx ebx, BYTE PTR [ipOutput+3]
-    or eax, ebx
+;DESDecryptBlock(cipherPtr, keyPtr, plainPtr) : same network, subkeys reversed
+DESDecryptBlock PROC uses ebx ecx esi edi cipherPtr:PTR BYTE, keyPtr:PTR BYTE, plainPtr:PTR BYTE
+    INVOKE GenerateKeySchedule, keyPtr, ADDR SubKeys
+    INVOKE InitialPermutation, cipherPtr, ADDR ipOutput
+    ; per FIPS decrypt convention, treat input as R16||L16
+    INVOKE PackBytesToDword, OFFSET ipOutput
     mov R0, eax
-    movzx eax, BYTE PTR [ipOutput+4]
-    shl eax, 24
-    movzx ebx, BYTE PTR [ipOutput+5]
-    shl ebx, 16
-    or eax, ebx
-    movzx ebx, BYTE PTR [ipOutput+6]
-    shl ebx, 8
-    or eax, ebx
-    movzx ebx, BYTE PTR [ipOutput+7]
-    or eax, ebx
+    INVOKE PackBytesToDword, OFFSET ipOutput+4
     mov L0, eax
+
     mov ecx, 16
     mov esi, OFFSET SubKeys
-    add esi, 90
+    add esi, 90              ; start at K16, step backwards to K1
 Decrypt_Round:
-
-    INVOKE FeistelRoundDecrypt, \
-        ADDR L0, \
-        ADDR R0, \
-        esi
-        
+    INVOKE FeistelRoundDecrypt, ADDR L0, ADDR R0, esi
     sub esi, 6
     dec ecx
-    cmp ecx, 0
-    jne Decrypt_Round
-    mov eax, L0
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR [ipOutput], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR [ipOutput+1], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR [ipOutput+2], bl
-    mov BYTE PTR [ipOutput+3], al
-    mov eax, R0
-    mov ebx, eax
-    shr ebx, 24
-    mov BYTE PTR [ipOutput+4], bl
-    mov ebx, eax
-    shr ebx, 16
-    mov BYTE PTR [ipOutput+5], bl
-    mov ebx, eax
-    shr ebx, 8
-    mov BYTE PTR [ipOutput+6], bl
-    mov BYTE PTR [ipOutput+7], al
-    
-    INVOKE InverseInitialPermutation, \
-        ADDR ipOutput, \
-        plainPtr
+    jnz Decrypt_Round
+
+    ; pre-output is L0 || R0 - no extra swap needed here
+    INVOKE UnpackDwordToBytes, L0, OFFSET ipOutput
+    INVOKE UnpackDwordToBytes, R0, OFFSET ipOutput+4
+    INVOKE InverseInitialPermutation, ADDR ipOutput, plainPtr
     ret
 DESDecryptBlock ENDP
 
-PKCS7_Pad PROC uses ebx ecx edx esi edi, \
-    inputPtr:PTR BYTE, \
-    inputLen:DWORD, \
-    outputPtr:PTR BYTE, \
-    outputLenPtr:PTR DWORD
-    
+;PKCS7_Pad(inputPtr, inputLen, outputPtr, outputLenPtr) : byte-copy logic, unchanged
+PKCS7_Pad PROC uses ebx ecx edx esi edi inputPtr:PTR BYTE, inputLen:DWORD, outputPtr:PTR BYTE, outputLenPtr:PTR DWORD
     mov eax, inputLen
     xor edx, edx
     mov ebx, 8
@@ -749,12 +398,8 @@ PaddingLoop:
     ret
 PKCS7_Pad ENDP
 
-PKCS7_Unpad PROC uses ebx ecx edx esi edi, \
-    inputPtr:PTR BYTE, \
-    inputLen:DWORD, \
-    outputPtr:PTR BYTE, \
-    outputLenPtr:PTR DWORD
-    
+;PKCS7_Unpad(inputPtr, inputLen, outputPtr, outputLenPtr) -> EAX (1=ok, 0=bad)
+PKCS7_Unpad PROC uses ebx ecx edx esi edi inputPtr:PTR BYTE, inputLen:DWORD, outputPtr:PTR BYTE, outputLenPtr:PTR DWORD
     mov eax, inputLen
     cmp eax, 0
     je InvalidPadding
@@ -810,20 +455,9 @@ InvalidPadding:
     ret
 PKCS7_Unpad ENDP
 
-DESEncryptECB PROC uses ebx ecx edx esi edi, \
-    inputPtr:PTR BYTE, \
-    inputLen:DWORD, \
-    keyPtr:PTR BYTE, \
-    paddedPtr:PTR BYTE, \
-    cipherPtr:PTR BYTE, \
-    outputLenPtr:PTR DWORD
-    
-    INVOKE PKCS7_Pad, \
-        inputPtr, \
-        inputLen, \
-        paddedPtr, \
-        outputLenPtr
-        
+;DESEncryptECB(inputPtr, inputLen, keyPtr, paddedPtr, cipherPtr, outputLenPtr)
+DESEncryptECB PROC uses ebx ecx edx esi edi inputPtr:PTR BYTE, inputLen:DWORD, keyPtr:PTR BYTE, paddedPtr:PTR BYTE, cipherPtr:PTR BYTE, outputLenPtr:PTR DWORD
+    INVOKE PKCS7_Pad, inputPtr, inputLen, paddedPtr, outputLenPtr
     mov esi, outputLenPtr
     mov eax, DWORD PTR [esi]
     xor edx, edx
@@ -836,12 +470,7 @@ ECB_Encrypt_Loop:
     cmp ecx, 0
     je ECB_Encrypt_Done
     push ecx
-    
-    INVOKE DESEncryptBlock, \
-        esi, \
-        keyPtr, \
-        edi
-        
+    INVOKE DESEncryptBlock, esi, keyPtr, edi
     pop ecx
     add esi, 8
     add edi, 8
@@ -851,12 +480,8 @@ ECB_Encrypt_Done:
     ret
 DESEncryptECB ENDP
 
-DESDecryptECB PROC uses eax ebx ecx edx esi edi, \
-    cipherPtr:PTR BYTE, \
-    cipherLen:DWORD, \
-    keyPtr:PTR BYTE, \
-    plainPtr:PTR BYTE, \
-    plainLenPtr:PTR DWORD
+;DESDecryptECB(cipherPtr, cipherLen, keyPtr, plainPtr, plainLenPtr)
+DESDecryptECB PROC uses eax ebx ecx edx esi edi cipherPtr:PTR BYTE, cipherLen:DWORD, keyPtr:PTR BYTE, plainPtr:PTR BYTE, plainLenPtr:PTR DWORD
     mov eax, cipherLen
     test eax, 7
     jnz ECB_Decrypt_Invalid
@@ -871,10 +496,7 @@ ECB_Decrypt_Loop:
     mov eax, decryptBlocks
     cmp eax, 0
     je ECB_Decrypt_Unpad
-    INVOKE DESDecryptBlock, \
-        decryptInputPtr, \
-        keyPtr, \
-        decryptOutputPtr
+    INVOKE DESDecryptBlock, decryptInputPtr, keyPtr, decryptOutputPtr
     mov eax, decryptInputPtr
     add eax, 8
     mov decryptInputPtr, eax
@@ -886,11 +508,7 @@ ECB_Decrypt_Loop:
     mov decryptBlocks, eax
     jmp ECB_Decrypt_Loop
 ECB_Decrypt_Unpad:
-    INVOKE PKCS7_Unpad, \
-        plainPtr, \
-        cipherLen, \
-        plainPtr, \
-        plainLenPtr
+    INVOKE PKCS7_Unpad, plainPtr, cipherLen, plainPtr, plainLenPtr
     ret
 ECB_Decrypt_Invalid:
     mov edi, plainLenPtr
